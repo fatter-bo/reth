@@ -7,7 +7,7 @@
 use crate::{
     errors::{EthHandshakeError, EthStreamError},
     handshake::EthereumEthHandshake,
-    message::{EthBroadcastMessage, ProtocolBroadcastMessage},
+    message::{EthBroadcastMessage, MessageError, ProtocolBroadcastMessage},
     p2pstream::HANDSHAKE_TIMEOUT,
     CanDisconnect, DisconnectReason, EthMessage, EthNetworkPrimitives, EthVersion, ProtocolMessage,
     UnifiedStatus,
@@ -137,6 +137,17 @@ where
         let msg = match ProtocolMessage::decode_message(self.version, &mut bytes.as_ref()) {
             Ok(m) => m,
             Err(err) => {
+                // Check if this is a Skipped message (like NewBlock for BSC compatibility)
+                if matches!(&err, MessageError::Skipped(_)) {
+                    trace!(
+                        version=?self.version,
+                        %err,
+                        "message type skipped for compatibility"
+                    );
+                    return Err(EthStreamError::InvalidMessage(err));
+                }
+
+                // For other errors, log with more details
                 let msg = if bytes.len() > 50 {
                     format!("{:02x?}...{:x?}", &bytes[..10], &bytes[bytes.len() - 10..])
                 } else {

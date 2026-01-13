@@ -37,6 +37,9 @@ pub enum MessageError {
     /// Thrown when rlp decoding a message failed.
     #[error("RLP error: {0}")]
     RlpError(#[from] alloy_rlp::Error),
+    /// Message type is intentionally skipped (e.g., BSC NewBlock with incompatible format)
+    #[error("message type {0:?} skipped")]
+    Skipped(EthMessageID),
     /// Other message error with custom message
     #[error("{0}")]
     Other(String),
@@ -75,6 +78,10 @@ impl<N: NetworkPrimitives> ProtocolMessage<N> {
                 EthMessage::NewBlockHashes(NewBlockHashes::decode(buf)?)
             }
             EthMessageID::NewBlock => {
+                // Skip NewBlock for BSC compatibility - BSC has additional optional fields
+                // (Sidecars, Bal) that cause RLP decoding failures
+                return Err(MessageError::Skipped(EthMessageID::NewBlock));
+                #[allow(unreachable_code)]
                 EthMessage::NewBlock(Box::new(N::NewBlockPayload::decode(buf)?))
             }
             EthMessageID::Transactions => EthMessage::Transactions(Transactions::decode(buf)?),
