@@ -250,18 +250,24 @@ impl<N: NetworkPrimitives> Swarm<N> {
                 if self.is_shutting_down() {
                     return None
                 }
-                // Insert peer only if no fork id or a valid fork id
-                if fork_id.map_or_else(|| true, |f| self.sessions.is_valid_fork_id(f)) {
-                    self.state_mut().peers_mut().add_peer(peer_id, addr, fork_id);
+                // TEMPORARY: Skip fork ID validation at discovery for BSC
+                // Allow all peers, handshake will validate chain compatibility
+                if let Some(f) = fork_id {
+                    if !self.sessions.is_valid_fork_id(f) {
+                        trace!(target: "net", ?peer_id, ?addr, remote_fork_id=?f, "discovered node with different fork id (allowing)");
+                    }
                 }
+                self.state_mut().peers_mut().add_peer(peer_id, addr, fork_id);
             }
             StateAction::DiscoveredEnrForkId { peer_id, fork_id } => {
-                if self.sessions.is_valid_fork_id(fork_id) {
-                    self.state_mut().peers_mut().set_discovered_fork_id(peer_id, fork_id);
-                } else {
-                    debug!(target: "net", ?peer_id, remote_fork_id=?fork_id, our_fork_id=?self.sessions.fork_id(), "fork id mismatch, removing peer");
-                    self.state_mut().peers_mut().remove_peer(peer_id);
+                // TEMPORARY: Skip fork ID validation at discovery layer for BSC
+                // BSC nodes may have varying fork IDs due to different software versions
+                // Real validation happens at eth handshake layer
+                if !self.sessions.is_valid_fork_id(fork_id) {
+                    debug!(target: "net", ?peer_id, remote_fork_id=?fork_id, our_fork_id=?self.sessions.fork_id(), "fork id mismatch at discovery (allowing connection attempt)");
                 }
+                // Always allow connection attempt, let handshake validate
+                self.state_mut().peers_mut().set_discovered_fork_id(peer_id, fork_id);
             }
         }
         None
