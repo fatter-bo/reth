@@ -267,4 +267,11 @@ pub enum ActiveSessionMessage<N: NetworkPrimitives> {
         /// Identifier of the remote peer.
         peer_id: PeerId,
     },
+    /// Ping RTT has been measured for a peer (after first ping/pong exchange).
+    PingRttMeasured {
+        /// Identifier of the remote peer.
+        peer_id: PeerId,
+        /// The measured RTT in milliseconds.
+        rtt_ms: u64,
+    },
 }

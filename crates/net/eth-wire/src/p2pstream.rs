@@ -256,22 +256,30 @@ pub struct P2PStream<S> {
     /// Whether this stream is currently in the process of disconnecting by sending a disconnect
     /// message.
     disconnecting: bool,
+
+    /// RTT that was just measured (set when first pong is received, then taken by caller).
+    /// This allows the session to be notified when RTT is first measured.
+    pending_rtt_ms: Option<u64>,
 }
 
 impl<S> P2PStream<S> {
     /// Create a new [`P2PStream`] from the provided stream.
     /// New [`P2PStream`]s are assumed to have completed the `p2p` handshake successfully and are
     /// ready to send and receive subprotocol messages.
+    ///
+    /// This automatically sends an immediate ping after connection for RTT measurement.
     pub fn new(inner: S, shared_capabilities: SharedCapabilities) -> Self {
         Self {
             inner,
             encoder: snap::raw::Encoder::new(),
             decoder: snap::raw::Decoder::new(),
-            pinger: Pinger::new(PING_INTERVAL, PING_TIMEOUT),
+            // Use immediate ping for RTT measurement right after connection
+            pinger: Pinger::new_with_immediate_ping(PING_INTERVAL, PING_TIMEOUT),
             shared_capabilities,
             outgoing_messages: VecDeque::new(),
             outgoing_message_buffer_capacity: MAX_P2P_CAPACITY,
             disconnecting: false,
+            pending_rtt_ms: None,
         }
     }
 
@@ -297,6 +305,26 @@ impl<S> P2PStream<S> {
         &self.shared_capabilities
     }
 
+    /// Returns the measured ping RTT in microseconds (None if not yet measured).
+    /// The RTT is measured from the first successful ping/pong exchange.
+    pub fn ping_rtt_us(&self) -> Option<u64> {
+        self.pinger.rtt_us()
+    }
+
+    /// Returns the measured ping RTT in milliseconds (None if not yet measured).
+    /// The RTT is measured from the first successful ping/pong exchange.
+    pub fn ping_rtt_ms(&self) -> Option<u64> {
+        self.pinger.rtt_ms()
+    }
+
+    /// Takes the pending RTT measurement if available.
+    /// This is set when the first pong is received. Returns `Some(rtt_ms)` once,
+    /// then returns `None` until a new RTT is measured (which doesn't happen as RTT is only
+    /// measured once).
+    pub fn take_pending_rtt_ms(&mut self) -> Option<u64> {
+        self.pending_rtt_ms.take()
+    }
+
     /// Returns `true` if the stream has outgoing capacity.
     fn has_outgoing_capacity(&self) -> bool {
         self.outgoing_messages.len() < self.outgoing_message_buffer_capacity
@@ -310,6 +338,14 @@ impl<S> P2PStream<S> {
     /// Queues in a _snappy_ encoded [`P2PMessage::Ping`] message.
     pub fn send_ping(&mut self) {
         self.outgoing_messages.push_back(Bytes::from(alloy_rlp::encode(P2PMessage::Ping)));
+    }
+
+    /// Sends an immediate ping for RTT measurement.
+    /// This is useful for measuring RTT quickly after connection establishment
+    /// instead of waiting for the regular ping interval (60 seconds).
+    pub fn send_ping_for_rtt(&mut self) {
+        self.pinger.start_immediate_ping();
+        self.send_ping();
     }
 }
 
@@ -476,7 +512,10 @@ where
                 }
                 _ if id == P2PMessageID::Pong as u8 => {
                     // if we were waiting for a pong, this will reset the pinger state
-                    this.pinger.on_pong()?
+                    // and calculate RTT on first pong
+                    if let Some(rtt_ms) = this.pinger.on_pong()? {
+                        this.pending_rtt_ms = Some(rtt_ms);
+                    }
                 }
                 _ if id == P2PMessageID::Disconnect as u8 => {
                     // At this point, the `decompress_buf` contains the snappy decompressed

@@ -825,6 +825,7 @@ impl<N: NetworkPrimitives> NetworkManager<N> {
                     status,
                     version,
                     peer_kind,
+                    ping_rtt_ms: None, // RTT is measured after session establishment
                 };
 
                 self.event_sender
@@ -993,6 +994,11 @@ impl<N: NetworkPrimitives> NetworkManager<N> {
                     .state_mut()
                     .peers_mut()
                     .apply_reputation_change(&peer_id, ReputationChangeKind::BadProtocol);
+            }
+            SwarmEvent::PingRttMeasured { peer_id, rtt_ms } => {
+                trace!(target: "net", ?peer_id, rtt_ms, "Ping RTT measured");
+                self.event_sender
+                    .notify(NetworkEvent::Peer(PeerEvent::PingRttMeasured { peer_id, rtt_ms }));
             }
         }
     }

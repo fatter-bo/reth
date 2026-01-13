@@ -93,6 +93,20 @@ impl<N: NetworkPrimitives> EthRlpxConnection<N> {
             Self::Satellite(conn) => conn.primary_mut().start_send_raw(msg),
         }
     }
+
+    /// Returns the measured ping RTT in milliseconds (None if not yet measured).
+    /// The RTT is measured from the first successful ping/pong exchange.
+    #[inline]
+    pub(crate) fn ping_rtt_ms(&self) -> Option<u64> {
+        self.inner().ping_rtt_ms()
+    }
+
+    /// Takes the pending RTT measurement if available.
+    /// Returns `Some(rtt_ms)` once when the first pong is received.
+    #[inline]
+    pub(crate) fn take_pending_rtt_ms(&mut self) -> Option<u64> {
+        self.inner_mut().take_pending_rtt_ms()
+    }
 }
 
 impl<N: NetworkPrimitives> From<EthPeerConnection<N>> for EthRlpxConnection<N> {

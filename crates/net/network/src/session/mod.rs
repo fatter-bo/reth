@@ -476,6 +476,9 @@ impl<N: NetworkPrimitives> SessionManager<N> {
                     ActiveSessionMessage::ProtocolBreach { peer_id } => {
                         Poll::Ready(SessionEvent::ProtocolBreach { peer_id })
                     }
+                    ActiveSessionMessage::PingRttMeasured { peer_id, rtt_ms } => {
+                        Poll::Ready(SessionEvent::PingRttMeasured { peer_id, rtt_ms })
+                    }
                 }
             }
         }
@@ -575,6 +578,7 @@ impl<N: NetworkPrimitives> SessionManager<N> {
                     local_range_info: self.local_range_info.clone(),
                     range_update_interval,
                     last_sent_latest_block: None,
+                    rtt_notified: false,
                 };
 
                 self.spawn(session);
@@ -814,6 +818,13 @@ pub enum SessionEvent<N: NetworkPrimitives> {
         peer_id: PeerId,
         /// The remote node's socket address that we were connected to
         remote_addr: SocketAddr,
+    },
+    /// Ping RTT has been measured for a peer (after first ping/pong exchange).
+    PingRttMeasured {
+        /// Identifier of the remote peer.
+        peer_id: PeerId,
+        /// The measured RTT in milliseconds.
+        rtt_ms: u64,
     },
 }
 

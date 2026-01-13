@@ -135,6 +135,9 @@ pub(crate) struct ActiveSession<N: NetworkPrimitives> {
     /// The last latest block number we sent in a range update
     /// Used to avoid sending unnecessary updates when block height hasn't changed significantly
     pub(crate) last_sent_latest_block: Option<u64>,
+    /// Whether we have notified the session manager about the measured ping RTT.
+    /// Once RTT is measured and notified, this is set to true.
+    pub(crate) rtt_notified: bool,
 }
 
 impl<N: NetworkPrimitives> ActiveSession<N> {
@@ -774,6 +777,21 @@ impl<N: NetworkPrimitives> Future for ActiveSession<N> {
             }
         }
 
+        // Check for pending RTT measurement and notify the session manager
+        if !this.rtt_notified {
+            if let Some(rtt_ms) = this.conn.take_pending_rtt_ms() {
+                this.rtt_notified = true;
+                // Send RTT measurement to session manager
+                if let Poll::Ready(Ok(_)) = this.to_session_manager.poll_reserve(cx) {
+                    let msg = ActiveSessionMessage::PingRttMeasured {
+                        peer_id: this.remote_peer_id,
+                        rtt_ms,
+                    };
+                    this.pending_message_to_session = Some(msg);
+                }
+            }
+        }
+
         this.shrink_to_fit();
 
         Poll::Pending
@@ -1083,6 +1101,7 @@ mod tests {
                         ),
                         range_update_interval: None,
                         last_sent_latest_block: None,
+                        rtt_notified: false,
                     }
                 }
                 ev => {

@@ -68,6 +68,9 @@ pub struct SessionInfo {
     pub version: EthVersion,
     /// The kind of peer this session represents
     pub peer_kind: PeerKind,
+    /// Measured ping RTT in milliseconds (None if not yet measured).
+    /// This is set after the first ping/pong exchange.
+    pub ping_rtt_ms: Option<u64>,
 }
 
 /// (Non-exhaustive) List of the different events emitted by the network that are of interest for
@@ -90,6 +93,14 @@ pub enum PeerEvent {
     PeerAdded(PeerId),
     /// Event emitted when a new peer is removed
     PeerRemoved(PeerId),
+    /// Ping RTT has been measured for a peer (after first ping/pong exchange).
+    /// This is emitted once per peer when the RTT is first measured.
+    PingRttMeasured {
+        /// The identifier of the peer.
+        peer_id: PeerId,
+        /// The measured RTT in milliseconds.
+        rtt_ms: u64,
+    },
 }
 
 /// (Non-exhaustive) Network events representing peer lifecycle events and session requests.

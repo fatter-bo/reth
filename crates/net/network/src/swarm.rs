@@ -172,6 +172,9 @@ impl<N: NetworkPrimitives> Swarm<N> {
             SessionEvent::ProtocolBreach { peer_id } => {
                 Some(SwarmEvent::ProtocolBreach { peer_id })
             }
+            SessionEvent::PingRttMeasured { peer_id, rtt_ms } => {
+                Some(SwarmEvent::PingRttMeasured { peer_id, rtt_ms })
+            }
         }
     }
 
@@ -417,6 +420,13 @@ pub(crate) enum SwarmEvent<N: NetworkPrimitives = EthNetworkPrimitives> {
     },
     /// Failed to establish a tcp stream to the given address/node
     OutgoingConnectionError { remote_addr: SocketAddr, peer_id: PeerId, error: io::Error },
+    /// Ping RTT has been measured for a peer (after first ping/pong exchange).
+    PingRttMeasured {
+        /// Identifier of the remote peer.
+        peer_id: PeerId,
+        /// The measured RTT in milliseconds.
+        rtt_ms: u64,
+    },
 }
 
 /// Represents the state of the connection of the node. If shutting down,

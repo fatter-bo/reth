@@ -2863,6 +2863,7 @@ mod tests {
             status: Arc::new(Default::default()),
             version: EthVersion::Eth68,
             peer_kind: PeerKind::Basic,
+            ping_rtt_ms: None,
         };
         let messages: PeerRequestSender<PeerRequest> = PeerRequestSender::new(peer_id, tx);
         tx_manager
