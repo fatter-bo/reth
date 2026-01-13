@@ -645,7 +645,7 @@ impl<N: NetworkPrimitives> NetworkManager<N> {
             }
             PeerMessage::BlockRangeUpdated(_) => {}
             PeerMessage::Other(other) => {
-                debug!(target: "net", message_id=%other.id, "Ignoring unsupported message");
+                trace!(target: "net", message_id=%other.id, "Ignoring unsupported message");
             }
         }
     }
