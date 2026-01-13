@@ -96,34 +96,36 @@ impl<N: NetworkPrimitives> ProtocolMessage<N> {
                     )?)
                 }
             }
-            EthMessageID::GetBlockHeaders => EthMessage::GetBlockHeaders(RequestPair::decode(buf)?),
-            EthMessageID::BlockHeaders => EthMessage::BlockHeaders(RequestPair::decode(buf)?),
-            EthMessageID::GetBlockBodies => EthMessage::GetBlockBodies(RequestPair::decode(buf)?),
-            EthMessageID::BlockBodies => EthMessage::BlockBodies(RequestPair::decode(buf)?),
+            // Skip block header/body messages - not needed for mempool monitoring
+            EthMessageID::GetBlockHeaders => {
+                return Err(MessageError::Skipped(EthMessageID::GetBlockHeaders));
+            }
+            EthMessageID::BlockHeaders => {
+                return Err(MessageError::Skipped(EthMessageID::BlockHeaders));
+            }
+            EthMessageID::GetBlockBodies => {
+                return Err(MessageError::Skipped(EthMessageID::GetBlockBodies));
+            }
+            EthMessageID::BlockBodies => {
+                return Err(MessageError::Skipped(EthMessageID::BlockBodies));
+            }
+            // Skip incoming requests - we're a consumer node, not serving data
             EthMessageID::GetPooledTransactions => {
-                EthMessage::GetPooledTransactions(RequestPair::decode(buf)?)
+                return Err(MessageError::Skipped(EthMessageID::GetPooledTransactions));
             }
             EthMessageID::PooledTransactions => {
                 EthMessage::PooledTransactions(RequestPair::decode(buf)?)
             }
+            // Skip deprecated NodeData messages
             EthMessageID::GetNodeData => {
-                if version >= EthVersion::Eth67 {
-                    return Err(MessageError::Invalid(version, EthMessageID::GetNodeData))
-                }
-                EthMessage::GetNodeData(RequestPair::decode(buf)?)
+                return Err(MessageError::Skipped(EthMessageID::GetNodeData));
             }
             EthMessageID::NodeData => {
-                if version >= EthVersion::Eth67 {
-                    return Err(MessageError::Invalid(version, EthMessageID::GetNodeData))
-                }
-                EthMessage::NodeData(RequestPair::decode(buf)?)
+                return Err(MessageError::Skipped(EthMessageID::NodeData));
             }
+            // Skip GetReceipts - we don't serve receipts to others
             EthMessageID::GetReceipts => {
-                if version >= EthVersion::Eth70 {
-                    EthMessage::GetReceipts70(RequestPair::decode(buf)?)
-                } else {
-                    EthMessage::GetReceipts(RequestPair::decode(buf)?)
-                }
+                return Err(MessageError::Skipped(EthMessageID::GetReceipts));
             }
             EthMessageID::Receipts => {
                 match version {
