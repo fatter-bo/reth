@@ -732,7 +732,7 @@ impl<N: NetworkPrimitives> Future for ActiveSession<N> {
                             Err(err) => {
                                 // TEMPORARY FIX for BSC: Log error but continue instead of closing
                                 // BSC may send messages with slightly different RLP encoding
-                                debug!(target: "net::session", %err, remote_peer_id=?this.remote_peer_id, "failed to receive message (continuing for BSC compatibility)");
+                                trace!(target: "net::session", %err, remote_peer_id=?this.remote_peer_id, "Skipping undecodable message (BSC compatibility)");
                                 // Try to continue instead of closing
                                 progress = true;
                                 continue;
