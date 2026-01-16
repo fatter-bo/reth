@@ -267,7 +267,10 @@ impl<N: NetworkPrimitives> Swarm<N> {
                 // BSC nodes may have varying fork IDs due to different software versions
                 // Real validation happens at eth handshake layer
                 if !self.sessions.is_valid_fork_id(fork_id) {
-                    debug!(target: "net", ?peer_id, remote_fork_id=?fork_id, our_fork_id=?self.sessions.fork_id(), "fork id mismatch at discovery (allowing connection attempt)");
+                    // Get peer address for logging (if available)
+                    let peer_addr = self.state().peers().peer_by_id(peer_id)
+                        .map(|(record, _)| record.address);
+                    debug!(target: "net", ?peer_id, ?peer_addr, remote_fork_id=?fork_id, our_fork_id=?self.sessions.fork_id(), "fork id mismatch at discovery (allowing connection attempt)");
                 }
                 // Always allow connection attempt, let handshake validate
                 self.state_mut().peers_mut().set_discovered_fork_id(peer_id, fork_id);
