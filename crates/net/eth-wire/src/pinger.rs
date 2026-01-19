@@ -24,6 +24,8 @@ pub(crate) struct Pinger {
     ping_sent_at: Option<Instant>,
     /// Last measured RTT in microseconds (set once on first pong, never updated)
     last_rtt_us: Option<u64>,
+    /// Number of consecutive ping timeouts. Reset to 0 when pong is received.
+    consecutive_timeouts: u8,
 }
 
 // === impl Pinger ===
@@ -41,6 +43,7 @@ impl Pinger {
             timeout: timeout_duration,
             ping_sent_at: None,
             last_rtt_us: None,
+            consecutive_timeouts: 0,
         }
     }
 
@@ -62,6 +65,7 @@ impl Pinger {
             timeout: timeout_duration,
             ping_sent_at: None,
             last_rtt_us: None,
+            consecutive_timeouts: 0,
         }
     }
 
@@ -87,6 +91,7 @@ impl Pinger {
                 self.ping_sent_at = None;
                 self.state = PingState::Ready;
                 self.ping_interval.reset();
+                self.consecutive_timeouts = 0;
                 Ok(first_rtt_ms)
             }
             PingState::TimedOut => {
@@ -95,6 +100,7 @@ impl Pinger {
                 self.ping_sent_at = None;
                 self.state = PingState::Ready;
                 self.ping_interval.reset();
+                self.consecutive_timeouts = 0;
                 Ok(None)
             }
         }
@@ -143,9 +149,10 @@ impl Pinger {
             }
             PingState::WaitingForPong => {
                 if self.timeout_timer.as_mut().poll(cx).is_ready() {
+                    self.consecutive_timeouts = self.consecutive_timeouts.saturating_add(1);
                     self.state = PingState::TimedOut;
                     self.ping_sent_at = None;
-                    return Poll::Ready(Ok(PingerEvent::Timeout))
+                    return Poll::Ready(Ok(PingerEvent::Timeout(self.consecutive_timeouts)))
                 }
             }
             PingState::TimedOut => {
@@ -155,6 +162,15 @@ impl Pinger {
             }
         };
         Poll::Pending
+    }
+
+    /// Resets the pinger state to Ready after a tolerated timeout.
+    /// This allows waiting for the next ping interval instead of disconnecting.
+    pub(crate) fn reset_after_timeout(&mut self) {
+        if self.state == PingState::TimedOut {
+            self.state = PingState::Ready;
+            self.ping_interval.reset();
+        }
     }
 }
 
@@ -186,8 +202,8 @@ pub(crate) enum PingerEvent {
     /// A new [`Ping`](super::P2PMessage::Ping) message should be sent.
     Ping,
 
-    /// The peer should be timed out.
-    Timeout,
+    /// The peer has timed out. Contains the number of consecutive timeouts.
+    Timeout(u8),
 }
 
 #[cfg(test)]
@@ -205,7 +221,7 @@ mod tests {
         assert_eq!(pinger.next().await.unwrap().unwrap(), PingerEvent::Ping);
 
         tokio::time::sleep(interval).await;
-        assert_eq!(pinger.next().await.unwrap().unwrap(), PingerEvent::Timeout);
+        assert_eq!(pinger.next().await.unwrap().unwrap(), PingerEvent::Timeout(1));
         let _ = pinger.on_pong().unwrap();
 
         assert_eq!(pinger.next().await.unwrap().unwrap(), PingerEvent::Ping);

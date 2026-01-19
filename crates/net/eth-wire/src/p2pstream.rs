@@ -584,11 +584,17 @@ where
             Poll::Ready(Ok(PingerEvent::Ping)) => {
                 this.send_ping();
             }
-            _ => {
-                // encode the disconnect message
+            Poll::Ready(Ok(PingerEvent::Timeout(consecutive_timeouts))) => {
+                // Only disconnect after 3 consecutive timeouts to tolerate transient network issues
+                if consecutive_timeouts >= 3 {
+                    this.start_disconnect(DisconnectReason::PingTimeout)?;
+                    return Poll::Ready(Ok(()))
+                }
+                // Reset pinger state to wait for the next ping interval
+                this.pinger.reset_after_timeout();
+            }
+            Poll::Ready(Err(_)) => {
                 this.start_disconnect(DisconnectReason::PingTimeout)?;
-
-                // End the stream after ping related error
                 return Poll::Ready(Ok(()))
             }
         }
